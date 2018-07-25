@@ -10,8 +10,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 
 
-#### FUNCTIONS 1.2
-import requests
+#### FUNCTIONS 1.0
 
 def validateFilename(filename):
     filenameregex = '^[a-zA-Z0-9]+_[a-zA-Z0-9]+_[a-zA-Z0-9]+_[0-9][0-9][0-9][0-9]_[0-9QY][0-9]$'
@@ -39,19 +38,20 @@ def validateFilename(filename):
 
 def validateURL(url):
     try:
-        r = requests.get(url)
+        r = urllib2.urlopen(url)
         count = 1
-        while r.status_code == 500 and count < 4:
+        while r.getcode() == 500 and count < 4:
             print ("Attempt {0} - Status code: {1}. Retrying.".format(count, r.status_code))
             count += 1
-            r = requests.get(url)
+            r = urllib2.urlopen(url)
         sourceFilename = r.headers.get('Content-Disposition')
+
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
         else:
             ext = os.path.splitext(url)[1]
-        validURL = r.status_code == 200
-        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx', '.pdf']
+        validURL = r.getcode() == 200
+        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx']
         return validURL, validFiletype
     except:
         print ("Error validating URL.")
@@ -85,75 +85,31 @@ def convert_mth_strings ( mth_string ):
 
 #### VARIABLES 1.0
 
-entity_id = "E1537_EFDC_gov"
-url = "http://www.eppingforestdc.gov.uk/index.php/home/file-store/category/6-csv?start=20"
+entity_id = "E2753_HBC_gov"
+url = "https://www.harrogate.gov.uk/downloads/download/99/expenditure_documents"
 errors = 0
 data = []
-d = {'limit': '0', '0f9358dcf0d8b9de65b32d49f9a7e8f7': '1'}
 
 
 #### READ HTML 1.0
 
-html = requests.post(url, data=d)
-soup = BeautifulSoup(html.text, 'lxml')
+html = urllib2.urlopen(url)
+soup = BeautifulSoup(html, 'lxml')
 
 #### SCRAPE DATA
 
-blocks = soup.find_all('div', "pd-filenamebox")
+blocks = soup.find_all('a', attrs = {'class': 'download-item__file-link'})
 for block in blocks:
-    if 'http' not in block.find('a')['href']:
-        url = 'http://www.eppingforestdc.gov.uk' + block.find('a')['href']
-    else:
-        url = block.find('a')['href']
-    file_name = block.find('a').text.strip()
-    csvMth = csvYr = ''
-    if 'Q4' in file_name:
-        csvMth = 'Q4'
-        year_text = re.match(r'.*([1-3][0-9]{3})', file_name)
-        if year_text is not None:
-            csvYr =year_text.group(1)
-    elif 'Q3' in file_name:
-        csvMth = 'Q3'
-        year_text = re.match(r'.*([1-3][0-9]{3})', file_name)
-        if year_text is not None:
-            csvYr = year_text.group(1)
-    elif 'Q2' in file_name:
-        csvMth = 'Q2'
-        year_text = re.match(r'.*([1-3][0-9]{3})', file_name)
-        if year_text is not None:
-            csvYr = year_text.group(1)
-    elif 'Q1' in file_name:
-        csvMth = 'Q1'
-        year_text = re.match(r'.*([1-3][0-9]{3})', file_name)
-        if year_text is not None:
-            csvYr = year_text.group(1)
-    elif 'April 2010 to December 2010' in file_name:
-        csvMth = 'Q0'
-        csvYr = '2010'
-    elif 'q4 2015-16' in file_name:
-        csvMth = 'Q1'
-        csvYr = '2016'
-    elif 'q1' in file_name:
-        csvMth = 'Q2'
-        year_text = re.match(r'.*([1-3][0-9]{3})', file_name)
-        if year_text is not None:
-            csvYr = year_text.group(1)
-    elif 'q2' in file_name:
-        csvMth = 'Q3'
-        year_text = re.match(r'.*([1-3][0-9]{3})', file_name)
-        if year_text is not None:
-            csvYr = year_text.group(1)
-    elif 'q3' in file_name:
-        csvMth = 'Q4'
-        year_text = re.match(r'.*([1-3][0-9]{3})', file_name)
-        if year_text is not None:
-            csvYr = year_text.group(1)
-    else:
-        csvMth = file_name.split()[-2][:3]
-        csvYr = file_name.split()[-1]
-    csvMth = convert_mth_strings(csvMth.upper())
-    data.append([csvYr, csvMth, url])
-
+    type_file = block.text.strip()
+    if 'csv' in type_file:
+        if 'http' not in block['href']:
+            url = 'https://www.harrogate.gov.uk' + block['href'].replace('/downloads/file/', '/download/downloads/id/')+'.csv'
+        else:
+            url = block['href'].replace('/downloads/file/', '/download/downloads/id/')+'.csv'
+        csvMth = type_file.split()[1][:3]
+        csvYr = type_file[:4]
+        csvMth = convert_mth_strings(csvMth.upper())
+        data.append([csvYr, csvMth, url])
 
 #### STORE DATA 1.0
 
